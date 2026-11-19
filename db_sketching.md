@@ -163,7 +163,7 @@ CREATE TABLE menu_item_option_group (
     UNIQUE (menu_item_id, option_group_id)
 );
 ```
-
+``` sql
 CREATE TABLE cart (
     id uuid pk 
     user_id not null refrence user on id on delete cascade
@@ -171,7 +171,9 @@ CREATE TABLE cart (
     created_at
     updated_at
 );
+```
 
+```sql
 CREATE TABLE cart_item (
     id uuid pk
     cart_id not null refrences cart on id on delete cascade
@@ -180,16 +182,20 @@ CREATE TABLE cart_item (
     created_at
     updated_at
 );
+```
 
 -- tbh on cart_item i think i can make a json object on a column that have a lsit of uuids of the option it has without cart_item_options
 
+```sql
 CREATE TABLE cart_item_option (
     id uuid pk
     cart_item_id not null refrence cart_item on id on delete cascade
     menu_option_id ont null refrence menu_options on id -- backend should delete on menu_option delete 
     unique(cart_item_id, menu_option_id)
 )
+```
 
+```sql
 CREATE TABLE orders ( --order is reserved
     id uuid pk
     cart_id not null refrence cart on id
@@ -202,14 +208,15 @@ CREATE TABLE orders ( --order is reserved
     created_at
     updated_at
 );
-
+```
+```sql
 CREATE TABLE driver (
     users_id not null uuid pk refrence user on id
     is_active boolen default false not null
     created_at
     updated_at
 );
-
+```
 
 
 
