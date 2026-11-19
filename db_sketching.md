@@ -94,7 +94,7 @@ Menu sections ("Burgers", "Drinks"). Each section belongs to one store — they 
 ```sql
 CREATE TABLE section (
     id          UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    store_id    UNIQUEIDENTIFIER NOT NULL REFERENCES store(id),
+    store_id    UNIQUEIDENTIFIER NOT NULL REFERENCES store(id) on delete cascade,
     name        NVARCHAR(50)  NOT NULL,
     sort_order  INT           NOT NULL DEFAULT 0,   -- display order in the app
     created_at  DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
@@ -107,12 +107,11 @@ CREATE TABLE section (
 ```sql
 CREATE TABLE menu_item (
     id           UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    section_id   UNIQUEIDENTIFIER NOT NULL REFERENCES section(id),
+    section_id   UNIQUEIDENTIFIER NOT NULL REFERENCES section(id) on delete cascade,
     name         NVARCHAR(100)  NOT NULL,
     description  NVARCHAR(MAX),
     price        DECIMAL(10,3)  NOT NULL CHECK (price >= 0),
     is_sold_out  BIT            NOT NULL DEFAULT 0,   -- still visible, but can't be added to cart
-    deleted_at   DATETIME2      NULL,                 -- soft delete: removed from menu, old orders keep it
     created_at   DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
     updated_at   DATETIME2      NOT NULL DEFAULT SYSDATETIME()
 );
@@ -127,7 +126,7 @@ Groups like Size, Extras and Sauce. A group belongs to the **store**, so one gro
 ```sql
 CREATE TABLE option_group (
     id          UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
-    store_id    UNIQUEIDENTIFIER NOT NULL REFERENCES store(id),
+    store_id    UNIQUEIDENTIFIER NOT NULL REFERENCES store(id) on delete cascade,
     name        NVARCHAR(50)  NOT NULL,
     min_select  INT           NOT NULL,   -- Size: 1, Extras: 0, Sauce: 0
     max_select  INT           NOT NULL,   -- Size: 1, Extras: 3, Sauce: 2
@@ -164,6 +163,76 @@ CREATE TABLE menu_item_option_group (
     UNIQUE (menu_item_id, option_group_id)
 );
 ```
+
+CREATE TABLE cart (
+    id uuid pk 
+    user_id not null refrence user on id on delete cascade
+    store_id not null refrence store on id -- backend should delete carts for the store when store is deleted 
+    created_at
+    updated_at
+);
+
+CREATE TABLE cart_item (
+    id uuid pk
+    cart_id not null refrences cart on id on delete cascade
+    menu_item_id not null refrences menu_item on id on delete cascade
+    quantity int not null check (quantity > 0 )
+    created_at
+    updated_at
+);
+
+-- tbh on cart_item i think i can make a json object on a column that have a lsit of uuids of the option it has without cart_item_options
+
+CREATE TABLE cart_item_option (
+    id uuid pk
+    cart_item_id not null refrence cart_item on id on delete cascade
+    menu_option_id ont null refrence menu_options on id -- backend should delete on menu_option delete 
+    unique(cart_item_id, menu_option_id)
+)
+
+CREATE TABLE orders ( --order is reserved
+    id uuid pk
+    cart_id not null refrence cart on id
+    driver_id uuid refrence driver on user_id
+    note text
+    cancelation_note text not null 
+    payment varchar check (payment in (card, cash)) not null
+    total DECIMAL(10,3) not null 
+    status varchar not null check in (status IN ('placed', 'accepted', 'on the way', 'delivered', 'declined', cancelled))
+    created_at
+    updated_at
+);
+
+CREATE TABLE driver (
+    users_id not null uuid pk refrence user on id
+    is_active boolen default false not null
+    created_at
+    updated_at
+);
+
+
+
+
+
+
+## Business decisions
+
+### Deleting menu items vs. keeping order history
+
+Order history has to stay correct even after a store changes or removes a product (spec section 10: the Chicken Sandwich is gone from the menu, but the old order still shows "Chicken Sandwich, with ketchup, 3.750"). There are two ways to do this:
+
+| | Option A: soft delete + linked snapshots | Option B: hard delete + value snapshots |
+|---|---|---|
+| Deleting a menu item | Not really deleted, just marked (`deleted_at`) | Row is actually deleted |
+| Order lines | Reference `menu_item` / `menu_option` by FK | Copy the values (name, price, chosen options) at checkout, no FK to the menu |
+| Old orders | Read the item through the FK | Read their own copied values |
+| Downside | Deleted rows stay in the DB forever and every menu query must filter them out | Order lines can't be joined back to the current menu item |
+
+**Chosen: Option B, hard delete with value snapshots.** The snapshot doesn't link to anything, so deleting a menu item, option or store never affects an old order.
+
+What this means for the schema:
+- Order snapshot tables must **not** have a cascading FK to `menu_item` or `menu_option`. A cascade would delete history, and a normal FK would block the delete.
+- `menu_item.deleted_at` is only needed for Option A.
 
 ## Indexes
 
