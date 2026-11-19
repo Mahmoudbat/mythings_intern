@@ -20,8 +20,7 @@ create table users ( -- while its preffered to use words that repreesent one thi
 
 create table address (
     id uuid primary key
-    user_id refrences the user on column id  -- if it was for a user
-    store_id refrences the store id -- if it was for a store
+    user_id refrences the user on column id  on DELETE CASCADE-- if it was for a user
     name varchar not null
     city varchar not null
     area not null
@@ -29,37 +28,82 @@ create table address (
     building_number varchar not null
     floor int not null
     note varchar -- optional
-    lattitude decimal not null
-    longtatuide decimal not null
+    lattitude DECIMAL(9,6) not null
+    longtatuide DECIMAL(9,6) not null
     created_at defaults to current timestamp
     updated_at defaults to current timestamp
-    CHECK ((user_id IS NULL) <> (store_id IS NULL)) -- cause a store and a user might have same id.... due to bad inserting 
 )
 
 alter table users on column last_used_address to refrence address address_id 
 
+-- sql server can sort by distance 
+
 create table store (
 
     id uuid primary key
-    name varchar not null unique 
+    name varchar not null 
     owner_id refrences user id table not null -- imma assume that a person could own multiple stores 
     is_paused BOOLEAN defaults to false not null
     -- i could know if it has more than one item for sale by selecting from products table where stre = store_id so no need to add a var here
     catagory varchar not null check in(restaurant, groceries, cafe)
     opens_at TIME not null
     closes_at TIME not null
-    check( opens_at <  closes_at)
-    delivery_fee decimal
+    delivery_fee DECIMAL(10,3)
+    lattitude DECIMAL(9,6) not null
+    city
+    street_name
+    longtatuide DECIMAL(9,6) not null 
     created_at 
+    updated_at
+) -- location doesnt refrence address table to optimize space
+
+create table section (
+    id uuid pk
+    name varchar not null
+    store_id refrence store on id not null
+    sort_order int 
+    created_at
     updated_at
 )
 
--- here i could create a a josn object in the store for menu or make its own seperate table im not sure....i prob should do this one in a seperate table since it has section, product, price, quantity, options for each item, like (size, extras, etc) each with price (DECIMAL(10,3).)addition #todo
+create table menu_item (
+    id uuid pk
+    name varchar not null
+    description text
+    section_id refrence section on id not null
+    price DECIMAL(10,3) not null
+    is_sold_out boolen default false not null
+    deleted_at timestamp defaults null
+    created_at
+    updated_at
 
--- i can do the same for sections too.... i can do json object in store table or a seperate table.... ex (burgers, sandwhiches , sides, drinks) this one should be in a seperate table too since it will be refrenced in product to see what section the product is in... but tat means i have to complex sql queres aka cte to get the section ide when inserting a new item to menu... tho thats just initial thoughts... #todo 
+)
+
+create table option_group (
+    id uuid pk
+    name varchar not null
+    store_id refrence store on id not null
+    min_select int not null
+    max_select int not null
+    CHECK (min_select >= 0 AND max_select >= min_select)
+)
+
+create table menu_option (
+    id pk uuid
+    name not null
+    option_group_id refrence option_group on id not null
+    extra_price DECIMAL(10,3) not null
+)
+
+create table menu_item_option_group (
+    id uuid pk
+    menu_item_id refrence menu_item on id
+    option_group_id also refrence
+    UNIQUE (menu_item_id, option_group_id) 
+)
 
 
-
+-- todo order by location closer comes first
 
 
 
